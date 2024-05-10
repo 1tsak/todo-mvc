@@ -11,30 +11,33 @@ class TodoModel {
       done: false,
     };
     this.todos.push(todo);
-    this.onTodoListChanged(this.todos)
+    this.onTodoListChanged(this.todos);
   }
   editTodo(id, updatedText) {
-    this.todos.map((todo) =>
+    this.todos = this.todos.map((todo) =>
       todo.id === id
         ? { id: todo.id, text: updatedText, done: todo.done }
         : todo
     );
-    this.onTodoListChanged(this.todos)
+    this.onTodoListChanged(this.todos);
   }
   deleteTodo(id) {
-    this.todos.filter((todo) => todo.id !== id);
-    this.onTodoListChanged(this.todos)
+    console.log("delete called");
+    this.todos = this.todos.filter((todo) => todo.id !== id);
+    this.onTodoListChanged(this.todos);
   }
   toggleTodo(id) {
-    this.todos.map((todo) =>
-      todo.id === id
-        ? { id: todo.id, text: updatedText, done: !todo.done }
-        : todo
+    this.todos = this.todos.map((todo) =>
+      todo.id === id ? { id: todo.id, text: todo.text, done: !todo.done } : todo
     );
-    this.onTodoListChanged(this.todos)
+    this.onTodoListChanged(this.todos);
   }
-  bindTodoListChanged(callback){
-    this.onTodoListChanged=callback
+  clearCompleted() {
+    this.todos = this.todos.filter((todo) => !todo.done);
+    this.onTodoListChanged(this.todos);
+  }
+  bindTodoListChanged(callback) {
+    this.onTodoListChanged = callback;
   }
 }
 
@@ -43,6 +46,7 @@ class View {
     this.input = this.getElement(".new-todo");
     this.todoListContainer = this.getElement(".todo-list-container");
     this.todoList = this.createElement("ul", "todo-list");
+    this.clearCompleted = this.getElement(".clear-completed");
     this.todoListContainer.append(this.todoList);
   }
   createElement(tag, className) {
@@ -70,31 +74,64 @@ class View {
         li.id = todo.id;
 
         //checkbox
-        const checkbox = this.createElement("input");
+        const checkbox = this.createElement("input", "toggle");
         checkbox.type = "checkbox";
         checkbox.checked = todo.done;
 
         // editable span
-        const span = this.createElement("span");
-        span.contentEditable = true;
-        span.classList.add("editable");
+        const label = this.createElement("label");
+        // span.contentEditable = true;
+        // span.classList.add("editable");
 
         if (todo.done) {
           const strike = this.createElement("s");
           strike.textContent = todo.text;
-          span.append(strike);
+          label.append(strike);
         } else {
-          span.textContent = todo.text;
+          label.textContent = todo.text;
         }
-        const deleteButton = this.createElement("button", "delete");
-        deleteButton.textContent = "Delete";
-        li.append(checkbox, span, deleteButton);
-
-        this.todoList.append(li);
+        const deleteButton = this.createElement("button", "destroy");
+        li.append(checkbox, label, deleteButton);
+        const view = this.createElement("div", "view");
+        view.append(li);
+        this.todoList.append(view);
       });
     }
   }
+  updateFooter(todos) {
+    if (todos.length > 0) {
+      const footer = this.getElement(".opt-footer");
+      footer.style.display = "flex";
+      const todoCount = this.getElement(".todo-count span");
+      todoCount.textContent = todos.filter((todo) => !todo.done).length;
+    } else {
+      const footer = this.getElement(".opt-footer");
+      footer.style.display = "none";
+    }
+
+    // completed todos
+    const completed = todos.filter((todo) => todo.done);
+    if (completed.length > 0) {
+      this.clearCompleted.textContent = "Clear Completed";
+    } else {
+      this.clearCompleted.textContent = "";
+    }
+  }
   bindAddTodo(handler) {
+    this.input.addEventListener("keyup", ({ key }) => {
+      if (key === "Enter") {
+        if (this._todoText) {
+          handler(this._todoText);
+          this._resetInput();
+        }
+      }
+    });
+    this.input.addEventListener("blur", () => {
+      if (this._todoText) {
+        handler(this._todoText);
+        this._resetInput();
+      }
+    });
     this.input.addEventListener("keyup", ({ key }) => {
       if (key === "Enter") {
         if (this._todoText) {
@@ -112,11 +149,15 @@ class View {
       }
     });
   }
+  bindClearCompleted(handler) {
+    this.clearCompleted.addEventListener("click", handler);
+  }
   bindToggleTodo(handler) {
     this.todoList.addEventListener("change", (event) => {
       if (event.target.type === "checkbox") {
         const id = parseInt(event.target.parentElement.id);
-        handler(id)
+        console.log(id);
+        handler(id);
       }
     });
   }
@@ -126,25 +167,29 @@ class Controller {
     this.model = model;
     this.view = view;
 
-    this.view.bindAddTodo(this.handleAddTodo)
-    this.view.bindDeleteTodo(this.handleDeleteTodo)
-    this.view.bindToggleTodo(this.handdleToggleTodo)
-    this.model.bindTodoListChanged(this.onTodoListChanged)
+    this.view.bindAddTodo(this.handleAddTodo);
+    this.view.bindDeleteTodo(this.handleDeleteTodo);
+    this.view.bindToggleTodo(this.handleToggleTodo);
+    this.view.bindClearCompleted(this.handleClearCompleted);
+    this.model.bindTodoListChanged(this.onTodoListChanged);
 
     this.onTodoListChanged(this.model.todos);
   }
   onTodoListChanged = (todos) => {
     this.view.displayTodos(todos);
+    this.view.updateFooter(todos);
   };
   handleAddTodo = (todoText) => {
     this.model.addTodo(todoText);
   };
   handleDeleteTodo = (id) => {
     this.model.deleteTodo(id);
-    console.log("delete clicked",id);
   };
-  handdleToggleTodo = (id) => {
+  handleToggleTodo = (id) => {
     this.model.toggleTodo(id);
+  };
+  handleClearCompleted = () => {
+    this.model.clearCompleted();
   };
 }
 
