@@ -1,8 +1,7 @@
 // Model
-
 class TodoModel {
   constructor() {
-    this.todos = [];
+    this.todos = JSON.parse(localStorage.getItem('todos')) || []
   }
   addTodo(text) {
     const todo = {
@@ -10,34 +9,63 @@ class TodoModel {
       text,
       done: false,
     };
+    // @optimize
     this.todos.push(todo);
-    this.onTodoListChanged(this.todos);
+    const urlList = window.location.hash.split("/");
+    const filter = urlList[urlList.length - 1];
+    this.applyFilter(filter);
+    this._commit(this.todos)
   }
   editTodo(id, updatedText) {
+    console.log("edittt");
     this.todos = this.todos.map((todo) =>
       todo.id === id
         ? { id: todo.id, text: updatedText, done: todo.done }
         : todo
     );
     this.onTodoListChanged(this.todos);
+    this._commit(this.todos)
   }
   deleteTodo(id) {
-    console.log("delete called");
     this.todos = this.todos.filter((todo) => todo.id !== id);
-    this.onTodoListChanged(this.todos);
+    const urlList = window.location.hash.split("/");
+    const filter = urlList[urlList.length - 1];
+    this.applyFilter(filter);
+    this._commit(this.todos)
   }
   toggleTodo(id) {
     this.todos = this.todos.map((todo) =>
       todo.id === id ? { id: todo.id, text: todo.text, done: !todo.done } : todo
     );
-    this.onTodoListChanged(this.todos);
+    const urlList = window.location.hash.split("/");
+    const filter = urlList[urlList.length - 1];
+    this.applyFilter(filter);
+    this._commit(this.todos)
   }
   clearCompleted() {
     this.todos = this.todos.filter((todo) => !todo.done);
     this.onTodoListChanged(this.todos);
+    this._commit(this.todos)
+  }
+
+  // @optimize
+  applyFilter(filter) {
+    if (filter === "active") {
+      const activeTodos = this.todos.filter((todo) => !todo.done);
+      this.onTodoListChanged(activeTodos);
+    } else if (filter === "completed") {
+      const completedTodos = this.todos.filter((todo) => todo.done);
+      this.onTodoListChanged(completedTodos);
+    } else {
+      this.onTodoListChanged(this.todos);
+    }
   }
   bindTodoListChanged(callback) {
     this.onTodoListChanged = callback;
+  }
+  _commit(todos) {
+    this.onTodoListChanged(todos)
+    localStorage.setItem('todos', JSON.stringify(todos))
   }
 }
 
@@ -143,7 +171,7 @@ class View {
   }
   bindDeleteTodo(handler) {
     this.todoList.addEventListener("click", (event) => {
-      if (event.target.className === "delete") {
+      if (event.target.className === "destroy") {
         const id = parseInt(event.target.parentElement.id);
         handler(id);
       }
@@ -161,6 +189,46 @@ class View {
       }
     });
   }
+  bindEditTodo(handler){
+    this.todoList.addEventListener("dblclick",(event)=>{
+      if(event.target.tagName==="LABEL"){
+        event.target.addEventListener("blur",()=>{
+          event.target.removeAttribute("contentEditable")
+          const id = parseInt(event.target.parentElement.id);
+          handler(id,event.target.textContent)
+
+        })
+        event.target.addEventListener("keyup",(event)=>{
+          if(event.key==="Enter"){
+            event.preventDefault();
+            event.target.removeAttribute("contentEditable")
+            const id = parseInt(event.target.parentElement.id);
+            handler(id,event.target.textContent)
+          }
+        })
+        event.target.parentElement.classList.add("editing");
+        event.target.setAttribute("contentEditable",true);
+        console.log(event.target.parentElement);
+      }
+    })
+  }
+  bindFilterChanged(handler) {
+    const ul = this.getElement(".filters");
+    ul.addEventListener("click", (event) => {
+      if (event.target.tagName === "A") {
+        let links = ul.getElementsByTagName("a");
+        for (var i = 0; i < links.length; i++) {
+          links[i].classList.remove('selected');
+      }
+        event.target.classList.add("selected");
+      }
+    });
+    window.onhashchange = function () {
+      const urlList = window.location.hash.split("/");
+      const filter = urlList[urlList.length - 1];
+      handler(filter);
+    };
+  }
 }
 class Controller {
   constructor(model, view) {
@@ -172,12 +240,14 @@ class Controller {
     this.view.bindToggleTodo(this.handleToggleTodo);
     this.view.bindClearCompleted(this.handleClearCompleted);
     this.model.bindTodoListChanged(this.onTodoListChanged);
+    this.view.bindFilterChanged(this.handleFilters);
+    this.view.bindEditTodo(this.handleEditTodo);
 
     this.onTodoListChanged(this.model.todos);
   }
   onTodoListChanged = (todos) => {
     this.view.displayTodos(todos);
-    this.view.updateFooter(todos);
+    this.view.updateFooter(this.model.todos);
   };
   handleAddTodo = (todoText) => {
     this.model.addTodo(todoText);
@@ -191,6 +261,12 @@ class Controller {
   handleClearCompleted = () => {
     this.model.clearCompleted();
   };
+  handleFilters = (filter) => {
+    this.model.applyFilter(filter);
+  };
+  handleEditTodo = (id,text)=>{
+    this.model.editTodo(id,text)
+  }
 }
 
 const app = new Controller(new TodoModel(), new View());
