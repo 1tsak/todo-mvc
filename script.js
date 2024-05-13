@@ -68,6 +68,7 @@ class View {
     this.clearCompleted = this.getElement(".clear-completed");
     this.toggleAll = this.getElement(".toggle-all");
     this.todoListContainer.append(this.todoList);
+    this.updateActiveFilterUi();
   }
   createElement(tag, className) {
     const element = document.createElement(tag);
@@ -227,6 +228,19 @@ class View {
     this.toggleAll.addEventListener("change", (event) => {
       handler(event.target.checked);
     });
+  }
+  updateActiveFilterUi() {
+    const urlList = window.location.hash.split("/");
+    const filter = urlList[urlList.length - 1];
+    const ul = this.getElement(".filters");
+    let links = ul.getElementsByTagName("a");
+    for (var i = 0; i < links.length; i++) {
+      if (links[i].id === `filter-${filter}`) {
+        links[i].classList.add("selected");
+      } else {
+        links[i].classList.remove("selected");
+      }
+    }
   }
 }
 class Controller {
