@@ -1,7 +1,7 @@
 // Model
 class TodoModel {
   constructor() {
-    this.todos = JSON.parse(localStorage.getItem('todos')) || []
+    this.todos = JSON.parse(localStorage.getItem("todos")) || [];
   }
   addTodo(text) {
     const todo = {
@@ -9,12 +9,9 @@ class TodoModel {
       text,
       done: false,
     };
-    // @optimize
     this.todos.push(todo);
-    const urlList = window.location.hash.split("/");
-    const filter = urlList[urlList.length - 1];
-    this.applyFilter(filter);
-    this._commit(this.todos)
+    this.onTodoListChanged(this.todos);
+    this._commit(this.todos);
   }
   editTodo(id, updatedText) {
     console.log("edittt");
@@ -24,48 +21,42 @@ class TodoModel {
         : todo
     );
     this.onTodoListChanged(this.todos);
-    this._commit(this.todos)
+    this._commit(this.todos);
   }
   deleteTodo(id) {
     this.todos = this.todos.filter((todo) => todo.id !== id);
-    const urlList = window.location.hash.split("/");
-    const filter = urlList[urlList.length - 1];
-    this.applyFilter(filter);
-    this._commit(this.todos)
+    this.onTodoListChanged(this.todos);
+    this._commit(this.todos);
   }
   toggleTodo(id) {
     this.todos = this.todos.map((todo) =>
       todo.id === id ? { id: todo.id, text: todo.text, done: !todo.done } : todo
     );
-    const urlList = window.location.hash.split("/");
-    const filter = urlList[urlList.length - 1];
-    this.applyFilter(filter);
-    this._commit(this.todos)
+    this.onTodoListChanged(this.todos);
+    this._commit(this.todos);
   }
   clearCompleted() {
     this.todos = this.todos.filter((todo) => !todo.done);
     this.onTodoListChanged(this.todos);
-    this._commit(this.todos)
+    this._commit(this.todos);
   }
-
-  // @optimize
-  applyFilter(filter) {
-    if (filter === "active") {
-      const activeTodos = this.todos.filter((todo) => !todo.done);
-      this.onTodoListChanged(activeTodos);
-    } else if (filter === "completed") {
-      const completedTodos = this.todos.filter((todo) => todo.done);
-      this.onTodoListChanged(completedTodos);
-    } else {
-      this.onTodoListChanged(this.todos);
-    }
+  toggleAll(state) {
+    this.todos = this.todos.map((todo) => {
+      return {
+        id: todo.id,
+        text: todo.text,
+        done: state,
+      };
+    });
+    this.onTodoListChanged(this.todos);
+    this._commit(this.todos);
   }
   bindTodoListChanged(callback) {
     this.onTodoListChanged = callback;
   }
   _commit(todos) {
-    this.onTodoListChanged(todos)
-    localStorage.setItem('todos', JSON.stringify(todos))
+    this.onTodoListChanged(todos);
+    localStorage.setItem("todos", JSON.stringify(todos));
   }
 }
 
@@ -75,6 +66,7 @@ class View {
     this.todoListContainer = this.getElement(".todo-list-container");
     this.todoList = this.createElement("ul", "todo-list");
     this.clearCompleted = this.getElement(".clear-completed");
+    this.toggleAll = this.getElement(".toggle-all");
     this.todoListContainer.append(this.todoList);
   }
   createElement(tag, className) {
@@ -93,36 +85,39 @@ class View {
     this.input.value = "";
   }
   displayTodos(todos) {
+    const urlList = window.location.hash.split("/");
+    const filter = urlList[urlList.length - 1];
     while (this.todoList.firstChild) {
       this.todoList.removeChild(this.todoList.firstChild);
     }
     if (todos.length > 0) {
       todos.forEach((todo) => {
-        const li = this.createElement("li");
-        li.id = todo.id;
+        if (
+          (filter === "active" && !todo.done) ||
+          (filter === "completed" && todo.done) ||
+          filter === ""
+        ) {
+          const li = this.createElement("li");
+          li.id = todo.id;
+          const checkbox = this.createElement("input", "toggle");
+          checkbox.type = "checkbox";
+          checkbox.checked = todo.done;
 
-        //checkbox
-        const checkbox = this.createElement("input", "toggle");
-        checkbox.type = "checkbox";
-        checkbox.checked = todo.done;
+          const label = this.createElement("label");
 
-        // editable span
-        const label = this.createElement("label");
-        // span.contentEditable = true;
-        // span.classList.add("editable");
-
-        if (todo.done) {
-          const strike = this.createElement("s");
-          strike.textContent = todo.text;
-          label.append(strike);
-        } else {
-          label.textContent = todo.text;
+          if (todo.done) {
+            const strike = this.createElement("s");
+            strike.textContent = todo.text;
+            label.append(strike);
+          } else {
+            label.textContent = todo.text;
+          }
+          const deleteButton = this.createElement("button", "destroy");
+          li.append(checkbox, label, deleteButton);
+          const view = this.createElement("div", "view");
+          view.append(li);
+          this.todoList.append(view);
         }
-        const deleteButton = this.createElement("button", "destroy");
-        li.append(checkbox, label, deleteButton);
-        const view = this.createElement("div", "view");
-        view.append(li);
-        this.todoList.append(view);
       });
     }
   }
@@ -189,28 +184,27 @@ class View {
       }
     });
   }
-  bindEditTodo(handler){
-    this.todoList.addEventListener("dblclick",(event)=>{
-      if(event.target.tagName==="LABEL"){
-        event.target.addEventListener("blur",()=>{
-          event.target.removeAttribute("contentEditable")
+  bindEditTodo(handler) {
+    this.todoList.addEventListener("dblclick", (event) => {
+      if (event.target.tagName === "LABEL") {
+        event.target.addEventListener("blur", () => {
+          event.target.removeAttribute("contentEditable");
           const id = parseInt(event.target.parentElement.id);
-          handler(id,event.target.textContent)
-
-        })
-        event.target.addEventListener("keyup",(event)=>{
-          if(event.key==="Enter"){
+          handler(id, event.target.textContent);
+        });
+        event.target.addEventListener("keyup", (event) => {
+          if (event.key === "Enter") {
             event.preventDefault();
-            event.target.removeAttribute("contentEditable")
+            event.target.removeAttribute("contentEditable");
             const id = parseInt(event.target.parentElement.id);
-            handler(id,event.target.textContent)
+            handler(id, event.target.textContent);
           }
-        })
+        });
         event.target.parentElement.classList.add("editing");
-        event.target.setAttribute("contentEditable",true);
+        event.target.setAttribute("contentEditable", true);
         console.log(event.target.parentElement);
       }
-    })
+    });
   }
   bindFilterChanged(handler) {
     const ul = this.getElement(".filters");
@@ -218,8 +212,8 @@ class View {
       if (event.target.tagName === "A") {
         let links = ul.getElementsByTagName("a");
         for (var i = 0; i < links.length; i++) {
-          links[i].classList.remove('selected');
-      }
+          links[i].classList.remove("selected");
+        }
         event.target.classList.add("selected");
       }
     });
@@ -228,6 +222,11 @@ class View {
       const filter = urlList[urlList.length - 1];
       handler(filter);
     };
+  }
+  bindToggleAll(handler) {
+    this.toggleAll.addEventListener("change", (event) => {
+      handler(event.target.checked);
+    });
   }
 }
 class Controller {
@@ -242,6 +241,7 @@ class Controller {
     this.model.bindTodoListChanged(this.onTodoListChanged);
     this.view.bindFilterChanged(this.handleFilters);
     this.view.bindEditTodo(this.handleEditTodo);
+    this.view.bindToggleAll(this.handleToggleAll);
 
     this.onTodoListChanged(this.model.todos);
   }
@@ -262,11 +262,14 @@ class Controller {
     this.model.clearCompleted();
   };
   handleFilters = (filter) => {
-    this.model.applyFilter(filter);
+    this.onTodoListChanged(this.model.todos);
   };
-  handleEditTodo = (id,text)=>{
-    this.model.editTodo(id,text)
-  }
+  handleEditTodo = (id, text) => {
+    this.model.editTodo(id, text);
+  };
+  handleToggleAll = (state) => {
+    this.model.toggleAll(state);
+  };
 }
 
 const app = new Controller(new TodoModel(), new View());
